@@ -1,0 +1,33 @@
+What this script is for
+-------------------------
+This program was a solution to a problem in file recovery from an application backup, created by the use of 2 incompatible programs on my Mac:  an organizational tool called DevonThink and a file compression utility called Clusters.  I had been using these tools for some time with no problem, but ran into a situation where I attempted to restore files from a DevonThink backup.  After recovery, the files that were restored indicated a filesize of zero, and were quite unusable. 
+
+In short:  given a recovered filename (as first parameter) of 'empty' files recovered from backup by DevonThink (placed in my ~/Desktop), the script will recover usable data and write to a new file (as second parameter).  
+
+How this script was created
+---------------------------
+
+ I contacted DevonThink for assistance, who pointed out that Clusters (and other utilities) use a HFS compression utility that DevonThink did not support, to maintain compatibility with pre 10.6 OSX releaseses (see email below from DevonThink support)
+
+	the HFS compression used by Clusters is (according to Apple) only recommended for system and backup files:
+
+ 	--hfsCompression	
+                   When copying files or extracting content from an archive, if the desti-
+                   nation is an HFS+ volume that supports compression, all the content
+                   will be compressed if appropriate. This is only supported on Mac OS X
+                   10.6 or later, and is only intended to be used in installation and
+                   backup scenarios that involve system files. Since files using HFS+ com-
+                   pression are not readable on versions of Mac OS X earlier than 10.6,
+                   this flag should not be used when dealing with non-system files or
+                   other user-generated content that will be used on a version of Mac OS X
+                   earlier than 10.6.
+
+	And it's unfortunately incompatible to universal binaries still supporting Mac OS X 10.5.x & PowerPC.
+
+So DevonThink had managed to restore files, but did not handle hfsCompression - so I dug into the details of HFS compression (short description from wikipedia below)
+
+	File system forks are associated with Apple's Hierarchical File System (HFS).[1] Apple's HFS, and the original Apple Macintosh file system MFS, allowed a file system object to have several kinds of forks: a data fork, a resource fork, and multiple named forks.
+	The resource fork was designed to store non-compiled data that would be used by the system's graphical user interface (GUI), such as localisable text strings, a file's icon to be used by the Finder or the menus and dialog boxes associated with an application.[2] However the feature was very flexible, so additional uses were found, such as splitting a word processing document into content and presentation, then storing each part in separate resources. As compiled software code was also stored in a resource, often applications would consist of just a resource fork and no data fork.
+
+The data fork was lost during recovery, but I decided to look into the files further. I discovered that resource forks were not empty for the recovered files.  (Resource forks are availabe in HFS+ through the hidden /..namedfork directory).  I examined the contents of resource forks further, these did not open in the application when copied to a new file.  I tried other decompression tools with no luck.  From the header and description of HFS compression, I believed the pdf was still compressed, and contained other data of unknown kind in the fork that prevented tools (such as zcat) from decompressing in one go.    I broke the problem down in 2 steps:  finding the start of usable data, and decompressing in chunks to capture recoverable data.   The start of 'usable data' in this script is found by trying to decompress data from the beginning of the file, iterating byte by byte until zlib decompression succeeds for a given chunk (iteration is done when an exception is raised by decompression). Decompressing in chunks continues, and any data that cannot be decompressed at the end of the file is discarded.  This allowed me to recover my files, at the cost of lost application metadata.
+
